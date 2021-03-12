@@ -1,9 +1,11 @@
 from pyswmm import Simulation
 from pyswmm import Nodes, Links, Subcatchments
+from shutil import copyfile
 import random
 import csv
 import os
 import pandas as pd
+import numpy as np
 
 INP_FILE = 'C:\\Users\\Christina\\Documents\\EPA SWMM Projects\\Newport_Baseline\\Newport_Baseline_WithLID_20190418.inp'
 
@@ -62,6 +64,14 @@ def rand_subcatchments(inp_file, csv_output, n_subc=None, rep=1, debug=False):
         writer = csv.writer(f)
         for _ in range(rep):
             writer.writerow(random.sample(subc, n_subc))
+
+def get_nodes(filename):
+    nodes = []
+    with open(filename, 'r') as nodefile:
+        for line in nodefile:
+            nodes.append(line.strip())
+    return nodes
+
 
 def rand_locations(csv_output, n_locations):
     '''
@@ -133,7 +143,9 @@ def find_threshold(orig_file, pollutant):
     '''
     
     df = pd.read_csv(orig_file)
-    return max(df[pollutant])
+    threshold = max(df[pollutant])
+    print('Found threshold')
+    return threshold
  
 def threshold_nodes(threshold, mod_file, out_file, pollutant):
     '''
@@ -160,16 +172,108 @@ def threshold_nodes(threshold, mod_file, out_file, pollutant):
         for key, value in nodes.items():
             writer.writerow([key, value])
 
+def run_locations(pollutant):
+    '''
+    Runs the simulation multiple times. Each time the simulation is run, a 
+        different pollution area's value is changed to 82.374, which is double 
+        the 'Cu' threshold. Then, we find the nodes that were affected after 
+        each run. This is stored in a file in ./Output/Diff/{location}.csv
+    Parameters:
+        - pollutant : pollutant to observe
+    '''
 
+    threshold = find_threshold('./Output/Original/'+pollutant+'.csv', pollutant)
+
+    # Find the unique locations
+    path = './WaterQualityFiles/'
+    filenames = os.listdir(path)
+    locations = set()
+    [locations.add(f.split('_')[0]) for f in filenames]
+
+    # Iterate through each location
+    for l in list(locations):
+        print('Starting ' + l)
+
+        # Copy the file to save the old data
+        name = l + '_' + pollutant
+        modname = path + name + '.dat'
+        copyfile(modname, 'tmp')
+        moddata = open(path+name+'.dat', 'w')
+        origdata = open('tmp', 'r')
+        
+        # Write modified pollutant data
+        for i, line in enumerate(origdata):
+            if i == 2194:
+                date, time, value = line.split()
+                moddata.write('12/31/2009\t23:59\t'+value+'\n')             # before
+                moddata.write('1/1/2010\t0:00\t'+str(threshold*2)+'\n')     # dump
+                moddata.write('1/1/2010\t2:00\t'+value+'\n')                # after
+            else:
+                moddata.write(line)
+
+        # Close files
+        moddata.close()
+        origdata.close()
+
+        # Run pipeline 
+        save_simulation_results(INP_FILE, './Output/Modified/'+name+'.csv', [pollutant], step=30*60)
+        threshold_nodes(threshold, './Output/Modified/'+name+'.csv', './Output/Diff/'+name+'.csv', pollutant)
+        
+        # Replaced modified pollutant data
+        os.remove(modname)
+        os.rename('tmp', modname)
+
+        print('Finished ' + l)
+        print('')
+
+def create_matrix(pollutant, nodes_file, matrix_file, locations_file):
+
+    # Find the unique locations
+    path = './Output/Diff/'
+    filenames = os.listdir(path)
+    set_locations = set()
+    [set_locations.add(f.split('_')[0]) for f in filenames]
+    locations = list(set_locations)
+
+    # Set up numpy array
+    nodes = get_nodes(nodes_file)
+    matrix = np.matrix(np.ones((len(locations), len(nodes))) * np.inf)
+
+    # Iterate through each location
+    for l_index, l in enumerate(locations):
+        with open(path+l+'_'+pollutant+'.csv', 'r') as readfile:
+            for line in readfile:
+                line = line.strip()
+                
+                # Get node information
+                n_name = line.split(',')[0]
+                if not line.split():
+                    continue
+                time_string = line.split()[1]
+                time = time_string.split(':')[0] + '.' + time_string.split(':')[1]
+                n_index = nodes.index(n_name)
+
+                # Update matrix
+                matrix[l_index, n_index] = float(time)
+
+    # Write locations
+    write_locations = open(locations_file, 'w')
+    write_locations.write('\n'.join(locations))
+    write_locations.close()
+
+    # Write matrix
+    np.savetxt(matrix_file, matrix, delimiter=',')
+                
 if __name__ == '__main__':
     
-    #delete_lines(2196, 2197)
-    #save_simulation_results(INP_FILE, './Output/Modified/Cu.csv', ['Cu'], step=30*60)
+    delete_lines(2196, 2197)
+    #save_simulation_results(INP_FILE, './Output/Modified/CMF03@PINCRK@F01_Cu.csv', ['Cu'], step=30*60)
     #save_simulation_results(INP_FILE, './Output/Modified/EColi.csv', ['EColi'], step=30*60)
     #rand_locations('./Output/locations.csv', 5)
-    threshold = find_threshold('./Output/Original/EColi.csv', 'EColi')
-    threshold_nodes(threshold, './Output/Modified/EColi.csv', './Output/Diff/Ecoli.csv', 'EColi')
-    
+    #threshold = find_threshold('./Output/Original/Cu.csv', 'Cu')
+    #threshold_nodes(threshold, './Output/Modified/CMF03@PINCRK@F01_Cu.csv', './Output/Diff/CMF03@PINCRK@F01_Cu.csv', 'Cu')
+    #run_locations('Cu')
+    create_matrix('Cu', 'nodes.txt', 'matrix.csv', 'locations.csv')
 
     #rand_subcatchments(INP_FILE, 'SWMM_Subcatchments.csv', n_subc=0.02, rep=10)
     #rand_subcatchments(INP_FILE, 'SWMM_Subcatchments.csv', n_subc=5, rep=10)
