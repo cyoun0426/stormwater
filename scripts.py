@@ -146,6 +146,7 @@ def find_threshold(orig_file, pollutant):
     threshold = max(df[pollutant])
     print('Found threshold')
     return threshold
+
  
 def threshold_nodes(threshold, mod_file, out_file, pollutant):
     '''
@@ -172,6 +173,43 @@ def threshold_nodes(threshold, mod_file, out_file, pollutant):
         for key, value in nodes.items():
             writer.writerow([key, value])
 
+
+def diff_nodes(orig_file, mod_file, out_file, pollutant):
+    '''
+    Outputs the nodes that had pollution levels greater than the threshold
+    Parameters:
+        - threshold : maximum value of pollution tolerated
+        - mod_file  : name of sim results with pollutant modifications
+        - out_file  : name of output file
+        - pollutant : name of column in mod_file
+    '''
+    # Load data into dataframe
+    df0 = pd.read_csv(orig_file)
+    df1 = pd.read_csv(mod_file)
+
+    # Find differences
+    df = column_names = ['DateTime', 'NodeID', pollutant]
+    df = pd.DataFrame(columns = column_names)
+    for i, j in zip(df0.iterrows(), df1.iterrows()):
+        row0 = i[1]
+        row1 = j[1]
+        if row0[pollutant] != row1[pollutant]:
+            df.loc[len(df.index)] = row1
+    print(df)
+
+    # Create dictionary of node-time mapping
+    nodes = {}
+    for index, row in df.iterrows():
+        if row['NodeID'] not in nodes:
+            nodes[row['NodeID']] = row['DateTime']
+   
+    # Write dictionary to file
+    with open(out_file, 'w') as csv_file:  
+        writer = csv.writer(csv_file)
+        for key, value in nodes.items():
+            writer.writerow([key, value])
+
+
 def run_locations(pollutant):
     '''
     Runs the simulation multiple times. Each time the simulation is run, a 
@@ -182,7 +220,8 @@ def run_locations(pollutant):
         - pollutant : pollutant to observe
     '''
 
-    threshold = find_threshold('./Output/Original/'+pollutant+'.csv', pollutant)
+    maximum = find_threshold('./Output/Original/'+pollutant+'.csv', pollutant)
+    threshold = 0
 
     # Find the unique locations
     path = './WaterQualityFiles/'
@@ -197,17 +236,17 @@ def run_locations(pollutant):
         # Copy the file to save the old data
         name = l + '_' + pollutant
         modname = path + name + '.dat'
-        copyfile(modname, 'tmp')
-        moddata = open(path+name+'.dat', 'w')
+        '''copyfile(modname, 'tmp')
+        moddata = open(modname, 'w')
         origdata = open('tmp', 'r')
         
         # Write modified pollutant data
         for i, line in enumerate(origdata):
-            if i == 2194:
+            if i == 2214:                                                   # TODO: change value according to date
                 date, time, value = line.split()
-                moddata.write('12/31/2009\t23:59\t'+value+'\n')             # before
-                moddata.write('1/1/2010\t0:00\t'+str(threshold*2)+'\n')     # dump
-                moddata.write('1/1/2010\t2:00\t'+value+'\n')                # after
+                moddata.write('1/21/2010\t9:59\t'+value+'\n')               # before
+                moddata.write('1/21/2010\t10:00\t'+str(maximum*2)+'\n')     # dump
+                moddata.write('1/21/2010\t12:00\t'+value+'\n')              # after
             else:
                 moddata.write(line)
 
@@ -216,15 +255,17 @@ def run_locations(pollutant):
         origdata.close()
 
         # Run pipeline 
-        save_simulation_results(INP_FILE, './Output/Modified/'+name+'.csv', [pollutant], step=30*60)
-        threshold_nodes(threshold, './Output/Modified/'+name+'.csv', './Output/Diff/'+name+'.csv', pollutant)
+        save_simulation_results(INP_FILE, './Output/Modified/'+name+'.csv', [pollutant], step=30*60)'''
+        diff_nodes('./Output/Original/'+pollutant+'.csv', './Output/Modified/'+name+'.csv', './Output/Diff/'+name+'.csv', pollutant)
+        #threshold_nodes(threshold, './Output/Modified/'+name+'.csv', './Output/Diff/'+name+'.csv', pollutant)
         
         # Replaced modified pollutant data
-        os.remove(modname)
-        os.rename('tmp', modname)
+        '''os.remove(modname)
+        os.rename('tmp', modname)'''
 
         print('Finished ' + l)
         print('')
+
 
 def create_matrix(pollutant, nodes_file, matrix_file, locations_file):
 
@@ -237,7 +278,8 @@ def create_matrix(pollutant, nodes_file, matrix_file, locations_file):
 
     # Set up numpy array
     nodes = get_nodes(nodes_file)
-    matrix = np.matrix(np.ones((len(locations), len(nodes))) * np.inf)
+    matrix = np.matrix(np.zeros((len(locations), len(nodes))), dtype='timedelta64[s]')
+    time0 = np.datetime64('2010-01-21 10:00:00')
 
     # Iterate through each location
     for l_index, l in enumerate(locations):
@@ -249,31 +291,34 @@ def create_matrix(pollutant, nodes_file, matrix_file, locations_file):
                 n_name = line.split(',')[0]
                 if not line.split():
                     continue
-                time_string = line.split()[1]
-                time = time_string.split(':')[0] + '.' + time_string.split(':')[1]
+                time1 = np.datetime64(line.split(',')[1])
+                td = time1 - time0
                 n_index = nodes.index(n_name)
 
                 # Update matrix
-                matrix[l_index, n_index] = float(time)
+                
+                matrix[l_index, n_index] = td
 
     # Write locations
     write_locations = open(locations_file, 'w')
     write_locations.write('\n'.join(locations))
     write_locations.close()
+    print(matrix.shape)
 
     # Write matrix
-    np.savetxt(matrix_file, matrix, delimiter=',')
-                
+    np.savetxt(matrix_file, matrix, fmt='%s', delimiter=',')
+
+
 if __name__ == '__main__':
     
-    delete_lines(2196, 2197)
-    #save_simulation_results(INP_FILE, './Output/Modified/CMF03@PINCRK@F01_Cu.csv', ['Cu'], step=30*60)
+    #delete_lines(2196, 2197)
+    run_locations('Cu')
+    create_matrix('Cu', 'nodes.txt', 'matrix.csv', 'locations.csv')
+    #save_simulation_results(INP_FILE, './Output/Original/Cu.csv', ['Cu'], step=30*60)
     #save_simulation_results(INP_FILE, './Output/Modified/EColi.csv', ['EColi'], step=30*60)
     #rand_locations('./Output/locations.csv', 5)
     #threshold = find_threshold('./Output/Original/Cu.csv', 'Cu')
     #threshold_nodes(threshold, './Output/Modified/CMF03@PINCRK@F01_Cu.csv', './Output/Diff/CMF03@PINCRK@F01_Cu.csv', 'Cu')
-    #run_locations('Cu')
-    create_matrix('Cu', 'nodes.txt', 'matrix.csv', 'locations.csv')
 
     #rand_subcatchments(INP_FILE, 'SWMM_Subcatchments.csv', n_subc=0.02, rep=10)
     #rand_subcatchments(INP_FILE, 'SWMM_Subcatchments.csv', n_subc=5, rep=10)
