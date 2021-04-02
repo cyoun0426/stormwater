@@ -4,31 +4,40 @@ from tqdm import tqdm
 
 
 education_tag_list = ['college','school','university','dormitory']
+education_score = [3,3,3,3]
+
 residential_tag_list = ['apartments','bungalow','residential','house']
+residential_score = [5,5,5,5]
+
 commercial_tag_list = ['hotel','commercial','industrial','office','retail','warehouse','service','construction']
+commerical_score = [7,9,9,7,7,7,7,9]
+
 agriculture_tag_list = ['farm','barn','cowshed','farm_auxiliary','greenhouse','slurry_tank','stable','sty','digester']
-road_tag_list = ['motorway','trunk','primary','secondary','tertiary','residential','unclassified','motorway_link','trunk_link','primary_link','secondary_link',
-                'tertiary_link','living_street','service','pedestrian','track','construction']
-smoothness_tag_list = ['excellent','good','intermediate','bad','very_bad','horrible']
+agriculture_score = [5] * len(agriculture_tag_list)
+
 road_surface_tag_list = ['paved','unpaved','asphalt','concrete','paving_stones','sett','cobblestone','metal','wood','compacted','fine_gravel','gravel','pebblestone',
 'plastic','grass_paved','grass','dirt','earth','mud','sand','ground']
+road_surface_score = [8] * len(road_surface_tag_list)
+
 #Basin = An area artificially graded to hold water.Together with basin=* for stormwater/rainwater infiltration/detention/retention basins.
 landuse_tag_list = ['commercial','construction','industrial','residential','retail','allotments','farmland','farmyard','basin','landfill','quarry','reservoir']
+landuse_score = [10,10,10,5,8,8,8,8,8,8,8,8]
 # works = A factory or industrial production plant
 # water_works = A place where drinking water is found and applied to the local waterpipes network.
 manmade_tag_list = ['wastewater_plant','water_works','works']
+manmade_score = [10,10,10]
 # wetland = A natural area subject to inundation or with waterlogged ground
 water_related_tag_list = ['wetland']
+water_related_score = [5]
 
 def amenity_score():
     
     masterlist = education_tag_list + residential_tag_list + commercial_tag_list + agriculture_tag_list + road_surface_tag_list + landuse_tag_list + manmade_tag_list + water_related_tag_list
-    masterlist = list(set(masterlist))
-    score = [10] * len(masterlist)
+    # masterlist = list(set(masterlist))
+    score = education_score + residential_score + commerical_score + agriculture_score + road_surface_score + landuse_score + manmade_score + water_related_score
     
     out = pd.DataFrame({'amenity': masterlist, 'score': score})
     out.to_csv('amenity_score.csv',index=False)
-
 
 # Visual mapping of OSM and SWMM input file
 # Using Subcatchment c008
@@ -99,6 +108,6 @@ def osm_tag_mapping():
 
 
 if __name__ == '__main__':
-    # amenity_score()
-    # swmm_coord_extract()
+    amenity_score()
+    swmm_coord_extract()
     osm_tag_mapping()
