@@ -236,17 +236,17 @@ def run_locations(pollutant):
         # Copy the file to save the old data
         name = l + '_' + pollutant
         modname = path + name + '.dat'
-        '''copyfile(modname, 'tmp')
+        copyfile(modname, 'tmp')
         moddata = open(modname, 'w')
         origdata = open('tmp', 'r')
         
         # Write modified pollutant data
         for i, line in enumerate(origdata):
-            if i == 2214:                                                   # TODO: change value according to date
+            if i == 2194:                                                   # TODO: change value according to date
                 date, time, value = line.split()
-                moddata.write('1/21/2010\t9:59\t'+value+'\n')               # before
-                moddata.write('1/21/2010\t10:00\t'+str(maximum*2)+'\n')     # dump
-                moddata.write('1/21/2010\t12:00\t'+value+'\n')              # after
+                moddata.write('12/31/2009\t23:59\t'+value+'\n')             # before
+                moddata.write('1/1/2010\t0:00\t'+str(maximum*5)+'\n')       # dump
+                moddata.write('1/1/2010\t6:00\t'+value+'\n')                # after
             else:
                 moddata.write(line)
 
@@ -255,13 +255,13 @@ def run_locations(pollutant):
         origdata.close()
 
         # Run pipeline 
-        save_simulation_results(INP_FILE, './Output/Modified/'+name+'.csv', [pollutant], step=30*60)'''
+        save_simulation_results(INP_FILE, './Output/Modified/'+name+'.csv', [pollutant], step=30*60)
         diff_nodes('./Output/Original/'+pollutant+'.csv', './Output/Modified/'+name+'.csv', './Output/Diff/'+name+'.csv', pollutant)
         #threshold_nodes(threshold, './Output/Modified/'+name+'.csv', './Output/Diff/'+name+'.csv', pollutant)
         
         # Replaced modified pollutant data
-        '''os.remove(modname)
-        os.rename('tmp', modname)'''
+        os.remove(modname)
+        os.rename('tmp', modname)
 
         print('Finished ' + l)
         print('')
@@ -279,7 +279,7 @@ def create_matrix(pollutant, nodes_file, matrix_file, locations_file):
     # Set up numpy array
     nodes = get_nodes(nodes_file)
     matrix = np.matrix(np.zeros((len(locations), len(nodes))), dtype='timedelta64[s]')
-    time0 = np.datetime64('2010-01-21 10:00:00')
+    time0 = np.datetime64('2010-01-01 00:00:00')
 
     # Iterate through each location
     for l_index, l in enumerate(locations):
@@ -312,9 +312,9 @@ def create_matrix(pollutant, nodes_file, matrix_file, locations_file):
 if __name__ == '__main__':
     
     #delete_lines(2196, 2197)
+    save_simulation_results(INP_FILE, './Output/Original/Cu.csv', ['Cu'], step=30*60)
     run_locations('Cu')
     create_matrix('Cu', 'nodes.txt', 'matrix.csv', 'locations.csv')
-    #save_simulation_results(INP_FILE, './Output/Original/Cu.csv', ['Cu'], step=30*60)
     #save_simulation_results(INP_FILE, './Output/Modified/EColi.csv', ['EColi'], step=30*60)
     #rand_locations('./Output/locations.csv', 5)
     #threshold = find_threshold('./Output/Original/Cu.csv', 'Cu')
